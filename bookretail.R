@@ -1,7 +1,7 @@
 # import libraries
 library(dplyr)
-library(ggplot2)
 library(MASS)
+library(car)
 
 # read data
 orders = read.csv("C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/orders.csv")
@@ -28,15 +28,20 @@ rec_df = orders %>%
   group_by(id) %>%
   summarize(rec = min(t))
 
-# total number of items
+# total number of books
 tot_items_df = orders %>%
   group_by(id) %>%
-  summarise(freq_item = n())
+  summarise(freq_item = sum(qty))
 
 # frequency (number of orders)
 freq_df = orders %>%
   group_by(id) %>%
   summarise(freq_order = n_distinct(ordnum))
+
+# total money (overall for a customer)
+total_spend_df = orders %>%
+  group_by(id) %>%
+  summarize(total_cust_spend = sum(total_price))
 
 # monetary (avg order qty size and price)
 mon_df = orders %>%
@@ -44,11 +49,6 @@ mon_df = orders %>%
   summarise(sum_qty = sum(qty), sum_total_price = sum(total_price)) %>%
   group_by(id) %>%
   summarise(avg_qty = mean(sum_qty), avg_price = mean(sum_total_price))
-
-# total money (overall for a customer)
-total_spend_df = orders %>%
-  group_by(id) %>%
-  summarize(total_cust_spend = sum(total_price))
 
 # diversity of categories
 div_cat_df = orders %>%
@@ -63,6 +63,10 @@ rfm_df = Reduce(function(x, y) merge(x, y, all.x = TRUE), list_df)
 count(rfm_df)
 summary(rfm_df)
 
+head(rfm_df)
+
+length(unique(orders[["id"]]))
+
 # combining rfm df and logtarg
 master_data = merge(rfm_df, target, by = "id", all.x = TRUE)
 
@@ -73,6 +77,7 @@ train = !is.na(master_data$logtarg)
 fit_1 = lm(logtarg ~ freq_item + freq_order + log(avg_qty + 1) + log(avg_price + 1) + log(total_cust_spend + 1) + div_cat + tof + rec, data = master_data, subset = train)
 summary(fit_1)
 vif(fit_1)
+plot(fit_1)
 yhat_1 = predict(fit_1, master_data[!train,])
 ans_1 = data.frame(id = master_data$id[!train], logtarg = yhat_1)
 ans_1$logtarg = ifelse(ans_1$logtarg < 0, 0, ans_1$logtarg)
