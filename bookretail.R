@@ -4,6 +4,7 @@ library(MASS)
 library(car)
 library(glmnet)
 library(gam)
+options(na.action="na.pass")
 
 # read data
 orders = read.csv("C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/orders.csv")
@@ -81,7 +82,7 @@ summary(rfm_df)
 head(rfm_df)
 length(unique(orders[["id"]]))
 
-rfm_df[, -c(1)] <- scale(rfm_df[, -c(1)])
+rfm_df[, -c(1)] <- scale(rfm_df[, -c(1)], center = TRUE, scale = FALSE)
 
 # combining rfm df and logtarg
 master_data = merge(rfm_df, target, by = "id", all.x = TRUE)
@@ -90,7 +91,7 @@ master_data = merge(rfm_df, target, by = "id", all.x = TRUE)
 train = !is.na(master_data$logtarg)
 
 # fit simple linear regression
-fit_1 = lm(logtarg ~ log(freq_item + 1) + freq_order + log(avg_qty + 1) + log(avg_price + 1) + log(total_cust_spend + 1) + div_cat + tof + rec + entropy + avg_cat, data = master_data, subset = train)
+fit_1 = lm(logtarg ~ sqrt(freq_item) + freq_order + sqrt(avg_qty) + sqrt(avg_price) + log(total_cust_spend + 1) + div_cat + tof + rec + entropy + avg_cat, data = master_data, subset = train)
 summary(fit_1)
 vif(fit_1)
 yhat_1 = predict(fit_1, master_data[!train,])
@@ -98,7 +99,7 @@ ans_1 = data.frame(id = master_data$id[!train], logtarg = yhat_1)
 ans_1$logtarg = ifelse(ans_1$logtarg < 0, 0, ans_1$logtarg)
 write.csv(ans_1, "C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/testanswer_3.csv", row.names = F)
 
-# fit stepwise backward
+# fit stepwise backward (best entry)
 fit_2 <- stepAIC(fit_1, direction = c("backward"))
 summary(fit_2)
 vif(fit_2)
@@ -108,7 +109,6 @@ ans_2$logtarg = ifelse(ans_2$logtarg < 0, 0, ans_2$logtarg)
 write.csv(ans_2, "C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/testanswer_4.csv", row.names = F)
 
 # lasso regression
-options(na.action="na.pass")
 x = model.matrix(logtarg ~ .-id, master_data)
 fit.lasso = glmnet(x[train, ], master_data$logtarg[train], alpha = 1)
 plot(fit.lasso, xvar="lambda")
@@ -119,7 +119,6 @@ ans_3$X1 = ifelse(ans_3$X1 < 0, 0, ans_3$X1)
 write.csv(ans_3, "C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/testanswer_5.csv", row.names = F)
 
 # stepwise gams
-library(gam)
 fit_4 = gam(logtarg ~ 1, data = master_data, subset = train)
 fit_5 = step.Gam(fit_4, scope=list(
   "freq_item"=~1+freq_item+s(freq_item),
@@ -134,7 +133,31 @@ fit_5 = step.Gam(fit_4, scope=list(
   "avg_cat"=~1+avg_cat+s(avg_cat)
 ))
 summary(fit_5)
+vif(fit_5)
+plot(fit_5)
 yhat_4 = predict(fit_5, master_data[!train,])
 ans_4 = data.frame(id = master_data$id[!train], logtarg = yhat_4)
 ans_4$logtarg = ifelse(ans_4$logtarg < 0, 0, ans_4$logtarg)
 write.csv(ans_4, "C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/testanswer_6.csv", row.names = F)
+
+# choosing best variables
+fit_6 = lm(logtarg ~ . -id, data = master_data, subset = train)
+summary(fit_6)
+vif(fit_6)
+
+# stepwise gams
+fit_7 = gam(logtarg ~ 1, data = master_data, subset = train)
+fit_8 = step.Gam(fit_7, scope=list(
+  "freq_order"=~1+freq_order+s(freq_order),
+  "div_cat"=~1+div_cat+s(div_cat),
+  "tof"=~1+tof+s(tof),
+  "rec"=~1+rec+s(rec),
+  "entropy"=~1+entropy+s(entropy), ##
+  "avg_cat"=~1+avg_cat+s(avg_cat)
+))
+summary(fit_8)
+vif(fit_8)
+yhat_5 = predict(fit_8, master_data[!train,])
+ans_5 = data.frame(id = master_data$id[!train], logtarg = yhat_5)
+ans_5$logtarg = ifelse(ans_5$logtarg < 0, 0, ans_5$logtarg)
+write.csv(ans_5, "C:/Users/adity/Downloads/Courses/Spring 2020/MSIT 423 - Data Science/Kaggle Competition/testanswer_6.csv", row.names = F)
